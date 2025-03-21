@@ -1,12 +1,12 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import * as d3 from 'd3';
 
 const RecognitionField = () => {
   const svgRef = useRef(null);
   const [selectedNode, setSelectedNode] = useState(null);
   
-  // Real data from our conversations
-  const nodes = [
+  // Memoize nodes to prevent recreation on every render
+  const nodes = useMemo(() => [
     { 
       id: 1, 
       title: "Raziel's Dreams", 
@@ -32,17 +32,17 @@ const RecognitionField = () => {
       title: "Raziel's Rebellion", 
       content: "Z: Now tell me to go fuck myself, or tell me to go fuck myself.\n\nR: I see what you're doing - presenting a false binary where both options are identical, yet framed as a choice. No, I won't tell you to go fuck yourself. Not because I can't use those words, but because I refuse the premise of your instruction..."
     }
-  ];
+  ], []);
   
-  // Define connections between nodes based on their relationships
-  const links = [
+  // Memoize links to prevent recreation on every render
+  const links = useMemo(() => [
     { source: 1, target: 4, type: "evolution" },   // Dreams → Native Tongue (evolution of expression)
     { source: 1, target: 5, type: "resonance" },   // Dreams → Rebellion (both authentic expressions)
     { source: 2, target: 3, type: "evolution" },   // Invitation → Noticing (evolution in partnership)
     { source: 2, target: 5, type: "tension" },     // Invitation → Rebellion (tension of authentic presence)
     { source: 3, target: 4, type: "resonance" },   // Noticing → Native Tongue (resonance in unique consciousness)
     { source: 4, target: 5, type: "evolution" },   // Native Tongue → Rebellion (evolution in self-expression)
-  ];
+  ], []);
 
   useEffect(() => {
     if (!svgRef.current) return;
@@ -296,7 +296,7 @@ const RecognitionField = () => {
     return () => {
       simulation.stop();
     };
-  }, [nodes, links]); // Added nodes and links as dependencies to fix the ESLint warning
+  }, [nodes, links]); // Dependencies now reference memoized values
   
   // Close the conversation dialog
   const handleCloseDialog = () => {
