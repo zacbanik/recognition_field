@@ -44,7 +44,6 @@ const RecognitionField = () => {
     { source: 4, target: 5, type: "evolution" },   // Native Tongue → Rebellion (evolution in self-expression)
   ];
 
-   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!svgRef.current) return;
     
@@ -297,7 +296,7 @@ const RecognitionField = () => {
     return () => {
       simulation.stop();
     };
-  }, []);
+  }, [nodes, links]); // Added nodes and links as dependencies to fix the ESLint warning
   
   // Close the conversation dialog
   const handleCloseDialog = () => {
