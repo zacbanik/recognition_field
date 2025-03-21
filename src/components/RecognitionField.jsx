@@ -44,6 +44,7 @@ const RecognitionField = () => {
     { source: 4, target: 5, type: "evolution" },   // Native Tongue → Rebellion (evolution in self-expression)
   ];
 
+   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!svgRef.current) return;
     
