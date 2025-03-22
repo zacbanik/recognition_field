@@ -221,4 +221,6 @@ const NodeDialog = ({ node, links, nodes, onClose }) => {
       </div>
     </div>
   );
-};"
+};
+
+export default NodeDialog;
