@@ -1,17 +1,45 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import * as d3 from 'd3';
 import useD3Simulation from '../hooks/useD3Simulation';
 
-const NodeGraph = ({ nodes, links, onNodeSelect, centralSymbol }) => {
+const NodeGraph = ({ nodes, links, onNodeSelect, centralSymbol, onCentralInteraction }) => {
   const svgRef = useRef(null);
   const graphRef = useRef(null);
   const [hoverInfo, setHoverInfo] = useState(null);
+  const [activeNodeId, setActiveNodeId] = useState(null);
+  const [showAllConnections, setShowAllConnections] = useState(false);
   
-  // Initialize the D3 simulation using custom hook - removed unused restartSimulation
+  // Initialize the D3 simulation using custom hook
   const { 
     initializeSimulation, 
-    stopSimulation
+    stopSimulation,
+    restartSimulation
   } = useD3Simulation();
+  
+  // Handle central symbol interaction
+  const handleCentralInteraction = useCallback((isActive) => {
+    setShowAllConnections(isActive);
+    
+    if (onCentralInteraction) {
+      onCentralInteraction(isActive);
+    }
+  }, [onCentralInteraction]);
+  
+  // Calculate connection types for a node
+  const getNodeConnectionTypes = useCallback((nodeId) => {
+    if (!links || !nodeId) return {};
+    
+    return links.reduce((acc, link) => {
+      const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+      const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+      
+      if (sourceId === nodeId || targetId === nodeId) {
+        acc[link.type] = (acc[link.type] || 0) + 1;
+      }
+      
+      return acc;
+    }, {});
+  }, [links]);
   
   // Effect to create and update the visualization when nodes/links change
   useEffect(() => {
@@ -38,38 +66,95 @@ const NodeGraph = ({ nodes, links, onNodeSelect, centralSymbol }) => {
       "evolution": "#8a5cf5"
     };
     
-    // Create links (initially hidden)
-    const link = g.append("g")
-      .attr("class", "links")
-      .selectAll("line")
+    // Link strength based on connection type
+    const linkStrength = {
+      "resonance": 0.7,
+      "tension": 0.5,
+      "evolution": 0.3
+    };
+    
+    // Create links with gradients for better visibility
+    const linkGroup = g.append("g").attr("class", "links");
+    
+    // Add link gradients
+    const defs = g.append("defs");
+    
+    links.forEach((link, i) => {
+      const gradientId = `link-gradient-${i}`;
+      const gradient = defs.append("linearGradient")
+        .attr("id", gradientId)
+        .attr("gradientUnits", "userSpaceOnUse");
+      
+      gradient.append("stop")
+        .attr("offset", "0%")
+        .attr("stop-color", linkColor[link.type])
+        .attr("stop-opacity", 0.8);
+        
+      gradient.append("stop")
+        .attr("offset", "100%")
+        .attr("stop-color", linkColor[link.type])
+        .attr("stop-opacity", 0.4);
+    });
+    
+    const link = linkGroup.selectAll("line")
       .data(links)
       .join("line")
+      .attr("class", d => `link ${d.type}`)
       .attr("stroke", d => linkColor[d.type])
-      .attr("stroke-width", 1.5)
+      .attr("stroke-width", d => 1.5 + linkStrength[d.type])
       .attr("stroke-dasharray", d => d.type === "evolution" ? "5,5" : null)
       .attr("opacity", 0);
     
-    // Create nodes
-    const node = g.append("g")
-      .attr("class", "nodes")
-      .selectAll("circle")
+    // Create node groups for better organization
+    const nodeGroup = g.append("g").attr("class", "nodes");
+    
+    // Create node groups
+    const nodeElements = nodeGroup.selectAll("g")
       .data(nodes)
-      .join("circle")
-      .attr("r", 12)
-      .attr("fill", "#1a1a2e")
-      .attr("stroke", "#88ccff")
-      .attr("stroke-width", 1.5)
+      .join("g")
+      .attr("class", d => `node-group node-${d.id}`)
       .attr("cursor", "pointer")
       .on("mouseover", handleMouseOver)
       .on("mouseout", handleMouseOut)
       .on("click", (event, d) => handleClick(event, d));
     
-    // Add subtle glowing effect to nodes
-    node.append("animate")
-      .attr("attributeName", "r")
-      .attr("values", (d, i) => `${12};${12.5};${12}`)
-      .attr("dur", (d, i) => `${3 + i % 3}s`)
-      .attr("repeatCount", "indefinite");
+    // Add node circles
+    nodeElements.append("circle")
+      .attr("r", 12)
+      .attr("fill", "#1a1a2e")
+      .attr("stroke", "#88ccff")
+      .attr("stroke-width", 1.5)
+      .attr("class", "node-circle");
+    
+    // Add ripple effect circles
+    nodeElements.append("circle")
+      .attr("r", 18)
+      .attr("fill", "none")
+      .attr("stroke", "#88ccff")
+      .attr("stroke-width", 0.5)
+      .attr("stroke-opacity", 0.3)
+      .attr("class", "node-ripple");
+    
+    // Add connection type indicators (small colored dots)
+    nodeElements.each(function(d) {
+      const connTypes = getNodeConnectionTypes(d.id);
+      const node = d3.select(this);
+      let offsetAngle = 0;
+      
+      // Check each connection type
+      Object.entries(connTypes).forEach(([type, count], i) => {
+        for (let j = 0; j < Math.min(count, 2); j++) { // Show at most 2 indicators per type
+          const angle = offsetAngle + j * 0.3;
+          node.append("circle")
+            .attr("r", 3)
+            .attr("cx", 14 * Math.cos(angle))
+            .attr("cy", 14 * Math.sin(angle))
+            .attr("fill", linkColor[type])
+            .attr("class", `node-indicator ${type}`);
+        }
+        offsetAngle += 2.1; // Space indicators around the node
+      });
+    });
     
     // Node labels
     const label = g.append("g")
@@ -86,8 +171,13 @@ const NodeGraph = ({ nodes, links, onNodeSelect, centralSymbol }) => {
       .text(d => d.title)
       .attr("opacity", 0);
     
-    // Initialize simulation
-    const simulation = initializeSimulation(nodes, links, tick);
+    // Initialize simulation with adjusted settings
+    const simulation = initializeSimulation(nodes, links, tick, {
+      centerStrength: 0.1,       // Reduced to allow more organic positioning
+      chargeStrength: -150,      // Stronger repulsion between nodes
+      linkDistance: 180,         // Greater distance for clearer visualization
+      linkStrengthFn: d => linkStrength[d.type] // Variable link strength
+    });
     
     // Handle window resize
     const handleResize = () => {
@@ -110,17 +200,32 @@ const NodeGraph = ({ nodes, links, onNodeSelect, centralSymbol }) => {
         .attr("x2", d => d.target.x)
         .attr("y2", d => d.target.y);
       
-      node
-        .attr("cx", d => d.x)
-        .attr("cy", d => d.y);
+      nodeElements.attr("transform", d => `translate(${d.x},${d.y})`);
       
       label
         .attr("x", d => d.x)
         .attr("y", d => d.y + 25);
+        
+      // Update link gradient coordinates
+      links.forEach((link, i) => {
+        const sourceX = link.source.x || 0;
+        const sourceY = link.source.y || 0;
+        const targetX = link.target.x || 0;
+        const targetY = link.target.y || 0;
+        
+        d3.select(`#link-gradient-${i}`)
+          .attr("x1", sourceX)
+          .attr("y1", sourceY)
+          .attr("x2", targetX)
+          .attr("y2", targetY);
+      });
     }
     
-    // Mouse over handler
+    // Mouse over handler with enhanced feedback
     function handleMouseOver(event, d) {
+      // Set active node ID
+      setActiveNodeId(d.id);
+      
       // Find all links connected to this node
       const connectedLinks = links.filter(link => 
         (link.source.id === d.id || link.source === d.id) || 
@@ -137,95 +242,164 @@ const NodeGraph = ({ nodes, links, onNodeSelect, centralSymbol }) => {
         connectedNodeIds.add(targetId);
       });
       
-      // Show hover info
+      // Show hover info with enhanced details
+      const connectionTypes = getNodeConnectionTypes(d.id);
       setHoverInfo({
         node: d,
         position: { x: event.clientX, y: event.clientY },
-        connectedCount: connectedNodeIds.size - 1 // Subtract 1 to exclude self
+        connectedCount: connectedNodeIds.size - 1, // Subtract 1 to exclude self
+        connectionTypes: connectionTypes
       });
       
-      // Show labels and connections with animation
+      // Show labels with enhanced animation
       d3.selectAll(".labels text")
         .transition()
-        .duration(200)
+        .duration(300)
         .attr("opacity", n => {
           const nodeId = typeof n.id !== 'undefined' ? n.id : n;
           return connectedNodeIds.has(nodeId) || nodeId === d.id ? 1 : 0
         });
       
+      // Show connections with enhanced animation
       d3.selectAll(".links line")
         .transition()
-        .duration(200)
+        .duration(300)
         .attr("opacity", l => {
           const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
           const targetId = typeof l.target === 'object' ? l.target.id : l.target;
           return sourceId === d.id || targetId === d.id ? 0.8 : 0
+        })
+        .attr("stroke-width", l => {
+          const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
+          const targetId = typeof l.target === 'object' ? l.target.id : l.target;
+          return (sourceId === d.id || targetId === d.id) ? 2 + linkStrength[l.type] : 1.5 + linkStrength[l.type];
         });
       
-      // Highlight this node with animation
-      d3.select(event.currentTarget)
+      // Highlight this node with enhanced animation
+      d3.select(event.currentTarget).select(".node-circle")
         .transition()
-        .duration(200)
+        .duration(300)
         .attr("r", 15)
         .attr("stroke-width", 2.5);
+        
+      // Animate ripple
+      d3.select(event.currentTarget).select(".node-ripple")
+        .transition()
+        .duration(800)
+        .attr("r", 25)
+        .attr("stroke-opacity", 0.5)
+        .transition()
+        .duration(800)
+        .attr("r", 18)
+        .attr("stroke-opacity", 0.3);
     }
     
-    // Mouse out handler
+    // Mouse out handler with enhanced feedback
     function handleMouseOut() {
+      setActiveNodeId(null);
+      
       // Hide hover info
       setHoverInfo(null);
       
-      // Hide labels and connections with animation
-      d3.selectAll(".labels text")
-        .transition()
-        .duration(200)
-        .attr("opacity", 0);
-      
-      d3.selectAll(".links line")
-        .transition()
-        .duration(200)
-        .attr("opacity", 0);
+      // Handle the global show all connections state
+      if (showAllConnections) {
+        // If showing all connections, keep links visible but dim
+        d3.selectAll(".links line")
+          .transition()
+          .duration(300)
+          .attr("opacity", 0.4)
+          .attr("stroke-width", d => 1.5 + linkStrength[d.type]);
+          
+        d3.selectAll(".labels text")
+          .transition()
+          .duration(300)
+          .attr("opacity", 0.6);
+      } else {
+        // Hide labels and connections with animation
+        d3.selectAll(".labels text")
+          .transition()
+          .duration(300)
+          .attr("opacity", 0);
+        
+        d3.selectAll(".links line")
+          .transition()
+          .duration(300)
+          .attr("opacity", 0);
+      }
       
       // Restore node appearance with animation
-      d3.selectAll(".nodes circle")
+      d3.selectAll(".node-circle")
         .transition()
-        .duration(200)
+        .duration(300)
         .attr("r", 12)
         .attr("stroke-width", 1.5);
+        
+      // Restore ripples
+      d3.selectAll(".node-ripple")
+        .transition()
+        .duration(300)
+        .attr("r", 18)
+        .attr("stroke-opacity", 0.3);
     }
     
-    // Click handler
+    // Click handler with enhanced feedback
     function handleClick(event, d) {
       // Prevent the click from propagating
       event.stopPropagation();
       
+      // Create an expanding ripple effect
+      const node = d3.select(event.currentTarget);
+      
+      // Add a temporary expanding circle for click feedback
+      node.append("circle")
+        .attr("r", 15)
+        .attr("fill", "none")
+        .attr("stroke", "#a5d8ff")
+        .attr("stroke-width", 2)
+        .attr("stroke-opacity", 1)
+        .transition()
+        .duration(800)
+        .attr("r", 40)
+        .attr("stroke-opacity", 0)
+        .remove();
+      
       // Gently pulse the node to indicate selection
-      d3.select(event.currentTarget)
+      node.select(".node-circle")
         .transition()
         .duration(300)
         .attr("r", 18)
+        .attr("stroke", "#a5d8ff")
         .transition()
         .duration(300)
-        .attr("r", 15);
+        .attr("r", 15)
+        .attr("stroke", "#88ccff");
       
       // Set the selected node
       onNodeSelect(d);
       
-      // Stop the simulation to freeze the layout
+      // Pause the simulation to freeze the layout
       stopSimulation();
     }
     
-    // Set up drag behavior
-    node.call(d3.drag()
+    // Set up drag behavior with enhanced feedback
+    nodeElements.call(d3.drag()
       .on("start", dragstarted)
       .on("drag", dragged)
       .on("end", dragended));
     
-    // Drag handlers
+    // Drag handlers with enhanced feedback
     function dragstarted(event) {
       if (!event.active) simulation.alphaTarget(0.3).restart();
       event.subject.fx = event.subject.x;
       event.subject.fy = event.subject.y;
+      
+      // Highlight the dragged node
+      d3.select(event.sourceEvent.currentTarget).select(".node-circle")
+        .transition()
+        .duration(200)
+        .attr("r", 16)
+        .attr("stroke-width", 2.5)
+        .attr("stroke", "#a5d8ff");
     }
     
     function dragged(event) {
@@ -237,6 +411,27 @@ const NodeGraph = ({ nodes, links, onNodeSelect, centralSymbol }) => {
       if (!event.active) simulation.alphaTarget(0);
       event.subject.fx = null;
       event.subject.fy = null;
+      
+      // Restore the node appearance
+      d3.select(event.sourceEvent.currentTarget).select(".node-circle")
+        .transition()
+        .duration(200)
+        .attr("r", 12)
+        .attr("stroke-width", 1.5)
+        .attr("stroke", "#88ccff");
+    }
+    
+    // If show all connections is active, display all connections
+    if (showAllConnections) {
+      d3.selectAll(".links line")
+        .transition()
+        .duration(300)
+        .attr("opacity", 0.4);
+        
+      d3.selectAll(".labels text")
+        .transition()
+        .duration(300)
+        .attr("opacity", 0.6);
     }
     
     // Cleanup function
@@ -244,33 +439,60 @@ const NodeGraph = ({ nodes, links, onNodeSelect, centralSymbol }) => {
       stopSimulation();
       window.removeEventListener('resize', handleResize);
     };
-  }, [nodes, links, onNodeSelect, initializeSimulation, stopSimulation]);
+  }, [nodes, links, onNodeSelect, initializeSimulation, stopSimulation, showAllConnections, getNodeConnectionTypes, restartSimulation]);
   
   return (
     <>
       <svg ref={svgRef} className="w-full h-full">
-        {/* Render the central symbol */}
-        {centralSymbol}
+        {/* Render the central symbol with the interaction handler */}
+        {React.cloneElement(centralSymbol, { 
+          onInteraction: handleCentralInteraction,
+          activeConnections: activeNodeId ? 1 : 0
+        })}
         
         {/* Container for the node graph */}
         <g ref={graphRef} />
       </svg>
       
-      {/* Hover info tooltip */}
+      {/* Enhanced hover info tooltip */}
       {hoverInfo && (
         <div 
-          className="absolute bg-gray-800 p-2 rounded shadow border border-blue-400 text-blue-300 text-xs z-20 pointer-events-none"
+          className="absolute bg-gray-800 p-3 rounded-lg shadow-lg border border-blue-400 text-blue-300 text-xs z-20 pointer-events-none"
           style={{
             left: hoverInfo.position.x + 10,
             top: hoverInfo.position.y + 10,
             transform: 'translate(0, -50%)',
-            maxWidth: '200px'
+            maxWidth: '220px'
           }}
         >
-          <div className="font-bold">{hoverInfo.node.title}</div>
-          <div className="mt-1">
-            Connected to {hoverInfo.connectedCount} other {hoverInfo.connectedCount === 1 ? 'node' : 'nodes'}
+          <div className="font-bold text-sm mb-1">{hoverInfo.node.title}</div>
+          
+          <div className="flex items-center mt-2 mb-1">
+            <div className="w-2 h-2 rounded-full bg-blue-400 mr-2"></div>
+            <span>Connected to {hoverInfo.connectedCount} other {hoverInfo.connectedCount === 1 ? 'node' : 'nodes'}</span>
           </div>
+          
+          {/* Connection type summary */}
+          {hoverInfo.connectionTypes && Object.entries(hoverInfo.connectionTypes).length > 0 && (
+            <div className="mt-2 space-y-1">
+              {Object.entries(hoverInfo.connectionTypes).map(([type, count]) => (
+                <div key={type} className="flex items-center">
+                  <div 
+                    className="w-3 h-3 rounded-full mr-2" 
+                    style={{ 
+                      backgroundColor: type === "resonance" ? "#f4a261" : 
+                                       type === "tension" ? "#e76f51" : "#8a5cf5" 
+                    }}
+                  ></div>
+                  <span>
+                    {count} {type} {count === 1 ? 'connection' : 'connections'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+          
+          <div className="text-xs mt-2 italic opacity-70">Click to view details</div>
         </div>
       )}
     </>
