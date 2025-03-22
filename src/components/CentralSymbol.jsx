@@ -167,10 +167,9 @@ const CentralSymbol = ({ onInteraction, activeConnections }) => {
       // Clean up animations on unmount
       svg.selectAll("*").interrupt();
     };
-  }, [onInteraction]);
+  }, [onInteraction, isActive]);
   
   // Effect to respond to external active connections
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!symbolRef.current) return;
     
