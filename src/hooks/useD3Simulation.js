@@ -16,8 +16,7 @@ const useD3Simulation = () => {
       linkStrengthFn = () => 0.5,
       orbitEnabled = true,
       orbitalVariance = 0.3,    // How much orbital paths can vary (0-1)
-      orbitalSpeed = 0.005,     // Base speed of orbital motion
-      spiralFactor = 0.8        // How much the orbits spiral outward (0-1)
+      orbitalSpeed = 0.005      // Base speed of orbital motion
     } = options;
     
     // Clear any existing simulation
@@ -42,35 +41,15 @@ const useD3Simulation = () => {
       .force("orbit", function(alpha) {
         if (!orbitEnabled) return;
         
-        // Calculate the center of mass
-        let centerX = 0, centerY = 0;
-        nodes.forEach(node => {
-          centerX += node.x || 0;
-          centerY += node.y || 0;
-        });
-        centerX /= nodes.length;
-        centerY /= nodes.length;
-        
         // Assign orbital radii if they don't exist yet
         nodes.forEach(node => {
           if (!node.orbitalRadius) {
-            // Calculate distance from current position to center
-            const dx = (node.x || 0) - centerX;
-            const dy = (node.y || 0) - centerY;
-            const currentDist = Math.sqrt(dx * dx + dy * dy);
-            
-            // Assign an orbital radius based on current distance and some variance
-            node.orbitalRadius = currentDist * (1 + (Math.random() * 2 - 1) * orbitalVariance);
-            node.orbitalRadius = Math.max(50, Math.min(250, node.orbitalRadius));
+            // Assign an orbital radius with some variance
+            const baseRadius = 120 + (node.id % 3) * 60;
+            node.orbitalRadius = baseRadius * (1 + (Math.random() * 2 - 1) * orbitalVariance);
             
             // Assign random orbital speed with direction
-            node.orbitalSpeed = orbitalSpeed * (0.5 + Math.random()) * (Math.random() > 0.5 ? 1 : -1);
-            
-            // Assign a phase offset
-            node.orbitalPhase = Math.random() * Math.PI * 2;
-            
-            // Assign a spiral rate
-            node.spiralRate = Math.random() * spiralFactor * 0.001;
+            node.orbitalSpeed = orbitalSpeed * (0.7 + Math.random() * 0.6) * (Math.random() > 0.5 ? 1 : -1);
           }
         });
         
@@ -80,35 +59,21 @@ const useD3Simulation = () => {
           const x = node.x || 0;
           const y = node.y || 0;
           
-          // Calculate current angle relative to center
-          let angle = Math.atan2(y - centerY, x - centerX);
+          // Calculate current angle
+          let angle = Math.atan2(y, x);
           
-          // Update angle based on node's orbital speed and phase
+          // Update angle based on node's orbital speed
           angle += node.orbitalSpeed * alpha * 10;
           
-          // Update radius with spiral effect
-          node.orbitalRadius += node.spiralRate;
-          
-          // Keep orbital radius within reasonable bounds
-          if (node.orbitalRadius < 50) node.orbitalRadius = 50;
-          if (node.orbitalRadius > 250) node.orbitalRadius = 250;
-          
           // Calculate new position
-          const newX = centerX + Math.cos(angle) * node.orbitalRadius;
-          const newY = centerY + Math.sin(angle) * node.orbitalRadius;
+          const newX = Math.cos(angle) * node.orbitalRadius;
+          const newY = Math.sin(angle) * node.orbitalRadius;
           
           // Move node gradually toward new orbital position
           node.vx = (node.vx || 0) + (newX - x) * alpha * 0.3;
           node.vy = (node.vy || 0) + (newY - y) * alpha * 0.3;
         });
-      })
-      
-      // Add a radial force to maintain overall structure
-      .force("radial", d3.forceRadial(d => {
-        // Generate cluster-like radial arrangement
-        // Nodes are assigned to different radial distances based on their id
-        return 80 + (d.id % 3) * 70;
-      }).strength(0.1).x(0).y(0));
+      });
     
     // Set decay rate slower for smoother animation
     simulation.alphaDecay(0.01);
@@ -154,23 +119,11 @@ const useD3Simulation = () => {
     }
   }, []);
   
-  // Update nodes and links without restarting completely
-  const updateSimulation = useCallback((nodes, links) => {
-    if (simulationRef.current) {
-      simulationRef.current
-        .nodes(nodes)
-        .force("link", d3.forceLink(links).id(d => d.id));
-      
-      reheatSimulation();
-    }
-  }, [reheatSimulation]);
-  
   return {
     initializeSimulation,
     stopSimulation,
     restartSimulation,
     reheatSimulation,
-    updateSimulation,
     currentSimulation: simulationRef.current
   };
 };
