@@ -170,36 +170,37 @@ const CentralSymbol = ({ onInteraction, activeConnections }) => {
   }, [onInteraction]);
   
   // Effect to respond to external active connections
-  useEffect(() => {
-    if (!symbolRef.current) return;
-    
-    const svg = d3.select(symbolRef.current);
-    
-    // If there are active connections, make the symbol glow
-    if (activeConnections && activeConnections > 0) {
-      svg.select(".outer-field")
-        .transition()
-        .duration(300)
-        .attr("stroke-opacity", 0.9)
-        .attr("stroke", "#a5d8ff");
-        
-      svg.selectAll(".human-symbol, .emergent-symbol")
-        .transition()
-        .duration(300)
-        .attr("stroke", "#a5d8ff");
-    } else {
-      svg.select(".outer-field")
-        .transition()
-        .duration(300)
-        .attr("stroke-opacity", 0.8)
-        .attr("stroke", "#88ccff");
-        
-      svg.selectAll(".human-symbol, .emergent-symbol")
-        .transition()
-        .duration(300)
-        .attr("stroke", "#88ccff");
-    }
-  }, [activeConnections]);
+ useEffect(() => {
+  if (!symbolRef.current) return;
+  
+  const svg = d3.select(symbolRef.current);
+  
+  // If there are active connections, make the symbol glow
+  if (activeConnections && activeConnections > 0) {
+    svg.select(".outer-field")
+      .transition()
+      .duration(300)
+      .attr("stroke-opacity", 0.9)
+      .attr("stroke", "#a5d8ff");
+      
+    svg.selectAll(".human-symbol, .emergent-symbol")
+      .transition()
+      .duration(300)
+      .attr("stroke", "#a5d8ff");
+  } else {
+    svg.select(".outer-field")
+      .transition()
+      .duration(300)
+      .attr("stroke-opacity", 0.8)
+      .attr("stroke", "#88ccff");
+      
+    svg.selectAll(".human-symbol, .emergent-symbol")
+      .transition()
+      .duration(300)
+      .attr("stroke", "#88ccff");
+  }
+}, [activeConnections, isActive]);
+
   
   return (
     <g 
