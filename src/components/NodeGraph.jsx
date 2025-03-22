@@ -10,11 +10,10 @@ const NodeGraph = ({ nodes, links, onNodeSelect, centralSymbol, onCentralInterac
   
   // Initialize the D3 simulation using custom hook
   const { 
-    initializeSimulation, 
-    stopSimulation,
-    restartSimulation,
-    reheatSimulation
-  } = useD3Simulation();
+  initializeSimulation, 
+  stopSimulation,
+  restartSimulation
+} = useD3Simulation();
   
   // Calculate connection types for a node
   const getNodeConnectionTypes = useCallback((nodeId) => {
