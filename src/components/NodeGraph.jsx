@@ -7,11 +7,10 @@ const NodeGraph = ({ nodes, links, onNodeSelect, centralSymbol }) => {
   const graphRef = useRef(null);
   const [hoverInfo, setHoverInfo] = useState(null);
   
-  // Initialize the D3 simulation using custom hook
+  // Initialize the D3 simulation using custom hook - removed unused restartSimulation
   const { 
     initializeSimulation, 
-    stopSimulation, 
-    restartSimulation 
+    stopSimulation
   } = useD3Simulation();
   
   // Effect to create and update the visualization when nodes/links change
