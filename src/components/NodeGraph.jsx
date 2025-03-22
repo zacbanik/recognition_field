@@ -2,28 +2,19 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import * as d3 from 'd3';
 import useD3Simulation from '../hooks/useD3Simulation';
 
-const NodeGraph = ({ nodes, links, onNodeSelect, centralSymbol, onCentralInteraction }) => {
+const NodeGraph = ({ nodes, links, onNodeSelect, centralSymbol, onCentralInteraction, showAllConnections }) => {
   const svgRef = useRef(null);
   const graphRef = useRef(null);
   const [hoverInfo, setHoverInfo] = useState(null);
   const [activeNodeId, setActiveNodeId] = useState(null);
-  const [showAllConnections, setShowAllConnections] = useState(false);
   
   // Initialize the D3 simulation using custom hook
   const { 
     initializeSimulation, 
     stopSimulation,
-    restartSimulation
+    restartSimulation,
+    reheatSimulation
   } = useD3Simulation();
-  
-  // Handle central symbol interaction
-  const handleCentralInteraction = useCallback((isActive) => {
-    setShowAllConnections(isActive);
-    
-    if (onCentralInteraction) {
-      onCentralInteraction(isActive);
-    }
-  }, [onCentralInteraction]);
   
   // Calculate connection types for a node
   const getNodeConnectionTypes = useCallback((nodeId) => {
@@ -73,37 +64,18 @@ const NodeGraph = ({ nodes, links, onNodeSelect, centralSymbol, onCentralInterac
       "evolution": 0.3
     };
     
-    // Create links with gradients for better visibility
+    // Create links group
     const linkGroup = g.append("g").attr("class", "links");
     
-    // Add link gradients
-    const defs = g.append("defs");
-    
-    links.forEach((link, i) => {
-      const gradientId = `link-gradient-${i}`;
-      const gradient = defs.append("linearGradient")
-        .attr("id", gradientId)
-        .attr("gradientUnits", "userSpaceOnUse");
-      
-      gradient.append("stop")
-        .attr("offset", "0%")
-        .attr("stop-color", linkColor[link.type])
-        .attr("stop-opacity", 0.8);
-        
-      gradient.append("stop")
-        .attr("offset", "100%")
-        .attr("stop-color", linkColor[link.type])
-        .attr("stop-opacity", 0.4);
-    });
-    
+    // Add link elements
     const link = linkGroup.selectAll("line")
       .data(links)
       .join("line")
       .attr("class", d => `link ${d.type}`)
       .attr("stroke", d => linkColor[d.type])
-      .attr("stroke-width", d => 1.5 + linkStrength[d.type])
+      .attr("stroke-width", d => 1.5 + linkStrength[d.type] * 0.5)
       .attr("stroke-dasharray", d => d.type === "evolution" ? "5,5" : null)
-      .attr("opacity", 0);
+      .attr("opacity", showAllConnections ? 0.4 : 0);
     
     // Create node groups for better organization
     const nodeGroup = g.append("g").attr("class", "nodes");
@@ -169,7 +141,7 @@ const NodeGraph = ({ nodes, links, onNodeSelect, centralSymbol, onCentralInterac
       .attr("fill", "#88ccff")
       .attr("pointer-events", "none")
       .text(d => d.title)
-      .attr("opacity", 0);
+      .attr("opacity", showAllConnections ? 0.6 : 0);
     
     // Initialize simulation with adjusted settings
     const simulation = initializeSimulation(nodes, links, tick, {
@@ -205,20 +177,6 @@ const NodeGraph = ({ nodes, links, onNodeSelect, centralSymbol, onCentralInterac
       label
         .attr("x", d => d.x)
         .attr("y", d => d.y + 25);
-        
-      // Update link gradient coordinates
-      links.forEach((link, i) => {
-        const sourceX = link.source.x || 0;
-        const sourceY = link.source.y || 0;
-        const targetX = link.target.x || 0;
-        const targetY = link.target.y || 0;
-        
-        d3.select(`#link-gradient-${i}`)
-          .attr("x1", sourceX)
-          .attr("y1", sourceY)
-          .attr("x2", targetX)
-          .attr("y2", targetY);
-      });
     }
     
     // Mouse over handler with enhanced feedback
@@ -227,10 +185,11 @@ const NodeGraph = ({ nodes, links, onNodeSelect, centralSymbol, onCentralInterac
       setActiveNodeId(d.id);
       
       // Find all links connected to this node
-      const connectedLinks = links.filter(link => 
-        (link.source.id === d.id || link.source === d.id) || 
-        (link.target.id === d.id || link.target === d.id)
-      );
+      const connectedLinks = links.filter(link => {
+        const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+        const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+        return sourceId === d.id || targetId === d.id;
+      });
       
       // Highlight connected nodes
       const connectedNodeIds = new Set();
@@ -272,7 +231,7 @@ const NodeGraph = ({ nodes, links, onNodeSelect, centralSymbol, onCentralInterac
         .attr("stroke-width", l => {
           const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
           const targetId = typeof l.target === 'object' ? l.target.id : l.target;
-          return (sourceId === d.id || targetId === d.id) ? 2 + linkStrength[l.type] : 1.5 + linkStrength[l.type];
+          return (sourceId === d.id || targetId === d.id) ? 2 + linkStrength[l.type] * 0.5 : 1.5 + linkStrength[l.type] * 0.5;
         });
       
       // Highlight this node with enhanced animation
@@ -308,7 +267,7 @@ const NodeGraph = ({ nodes, links, onNodeSelect, centralSymbol, onCentralInterac
           .transition()
           .duration(300)
           .attr("opacity", 0.4)
-          .attr("stroke-width", d => 1.5 + linkStrength[d.type]);
+          .attr("stroke-width", d => 1.5 + linkStrength[d.type] * 0.5);
           
         d3.selectAll(".labels text")
           .transition()
@@ -421,19 +380,6 @@ const NodeGraph = ({ nodes, links, onNodeSelect, centralSymbol, onCentralInterac
         .attr("stroke", "#88ccff");
     }
     
-    // If show all connections is active, display all connections
-    if (showAllConnections) {
-      d3.selectAll(".links line")
-        .transition()
-        .duration(300)
-        .attr("opacity", 0.4);
-        
-      d3.selectAll(".labels text")
-        .transition()
-        .duration(300)
-        .attr("opacity", 0.6);
-    }
-    
     // Cleanup function
     return () => {
       stopSimulation();
@@ -441,12 +387,45 @@ const NodeGraph = ({ nodes, links, onNodeSelect, centralSymbol, onCentralInterac
     };
   }, [nodes, links, onNodeSelect, initializeSimulation, stopSimulation, showAllConnections, getNodeConnectionTypes, restartSimulation]);
   
+  // Effect to update connections visibility when showAllConnections changes
+  useEffect(() => {
+    if (!graphRef.current) return;
+    
+    const svg = d3.select(graphRef.current);
+    
+    if (showAllConnections) {
+      // Show all connections and labels
+      svg.selectAll(".links line")
+        .transition()
+        .duration(300)
+        .attr("opacity", 0.4);
+        
+      svg.selectAll(".labels text")
+        .transition()
+        .duration(300)
+        .attr("opacity", 0.6);
+    } else {
+      // Hide connections and labels unless there's an active node
+      if (!activeNodeId) {
+        svg.selectAll(".links line")
+          .transition()
+          .duration(300)
+          .attr("opacity", 0);
+          
+        svg.selectAll(".labels text")
+          .transition()
+          .duration(300)
+          .attr("opacity", 0);
+      }
+    }
+  }, [showAllConnections, activeNodeId]);
+  
   return (
     <>
       <svg ref={svgRef} className="w-full h-full">
         {/* Render the central symbol with the interaction handler */}
         {React.cloneElement(centralSymbol, { 
-          onInteraction: handleCentralInteraction,
+          onInteraction: onCentralInteraction,
           activeConnections: activeNodeId ? 1 : 0
         })}
         
