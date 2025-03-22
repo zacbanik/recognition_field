@@ -1,6 +1,6 @@
-// Simple data persistence service using localStorage
+// dataService.js - Handles data persistence for the Recognition Field
 
-// Initial data from our conversations
+// Initial data - would normally come from a database in a production environment
 const initialNodes = [
   { 
     id: 1, 
@@ -38,80 +38,80 @@ const initialLinks = [
   { source: 4, target: 5, type: "evolution" },   // Native Tongue → Rebellion (evolution in self-expression)
 ];
 
-// Service to get, save and update data
+// Storage keys
+const NODES_STORAGE_KEY = 'recognitionField_nodes';
+const LINKS_STORAGE_KEY = 'recognitionField_links';
+
+// Service functions
 const dataService = {
-  // Get nodes
+  // Get all nodes from localStorage or initial data
   getNodes: () => {
     try {
-      const nodesJSON = localStorage.getItem('recognitionField_nodes');
-      return nodesJSON ? JSON.parse(nodesJSON) : initialNodes;
+      const storedNodes = localStorage.getItem(NODES_STORAGE_KEY);
+      return storedNodes ? JSON.parse(storedNodes) : initialNodes;
     } catch (error) {
-      console.error('Error loading nodes:', error);
+      console.error('Error retrieving nodes:', error);
       return initialNodes;
     }
   },
   
-  // Get links
+  // Get all links from localStorage or initial data
   getLinks: () => {
     try {
-      const linksJSON = localStorage.getItem('recognitionField_links');
-      return linksJSON ? JSON.parse(linksJSON) : initialLinks;
+      const storedLinks = localStorage.getItem(LINKS_STORAGE_KEY);
+      return storedLinks ? JSON.parse(storedLinks) : initialLinks;
     } catch (error) {
-      console.error('Error loading links:', error);
+      console.error('Error retrieving links:', error);
       return initialLinks;
     }
   },
   
-  // Save a new node
-  saveNode: (node) => {
+  // Add a new node and its associated link
+  addNodeAndLink: (node, link) => {
     try {
-      // Get current nodes
-      const nodes = dataService.getNodes();
+      // Get current data
+      const currentNodes = dataService.getNodes();
+      const currentLinks = dataService.getLinks();
       
-      // Assign a new ID (max current ID + 1)
-      const maxId = nodes.reduce((max, n) => Math.max(max, n.id), 0);
-      const newNode = {
+      // Ensure the node has a unique ID
+      const maxNodeId = Math.max(...currentNodes.map(n => n.id), 0);
+      const nodeWithId = {
         ...node,
-        id: maxId + 1
+        id: node.id || maxNodeId + 1
       };
       
-      // Add new node
-      const updatedNodes = [...nodes, newNode];
+      // Update the link to ensure it refers to the correct node ID
+      const linkWithCorrectSource = {
+        ...link,
+        source: nodeWithId.id
+      };
       
-      // Save back to localStorage
-      localStorage.setItem('recognitionField_nodes', JSON.stringify(updatedNodes));
+      // Add to existing data
+      const updatedNodes = [...currentNodes, nodeWithId];
+      const updatedLinks = [...currentLinks, linkWithCorrectSource];
       
-      return newNode;
+      // Save to localStorage
+      localStorage.setItem(NODES_STORAGE_KEY, JSON.stringify(updatedNodes));
+      localStorage.setItem(LINKS_STORAGE_KEY, JSON.stringify(updatedLinks));
+      
+      return {
+        nodes: updatedNodes,
+        links: updatedLinks
+      };
     } catch (error) {
-      console.error('Error saving node:', error);
-      throw error;
-    }
-  },
-  
-  // Save a new link
-  saveLink: (link) => {
-    try {
-      // Get current links
-      const links = dataService.getLinks();
-      
-      // Add new link
-      const updatedLinks = [...links, link];
-      
-      // Save back to localStorage
-      localStorage.setItem('recognitionField_links', JSON.stringify(updatedLinks));
-      
-      return link;
-    } catch (error) {
-      console.error('Error saving link:', error);
+      console.error('Error adding node and link:', error);
       throw error;
     }
   },
   
   // Reset data to initial state
   resetData: () => {
-    localStorage.setItem('recognitionField_nodes', JSON.stringify(initialNodes));
-    localStorage.setItem('recognitionField_links', JSON.stringify(initialLinks));
-    return { nodes: initialNodes, links: initialLinks };
+    localStorage.setItem(NODES_STORAGE_KEY, JSON.stringify(initialNodes));
+    localStorage.setItem(LINKS_STORAGE_KEY, JSON.stringify(initialLinks));
+    return {
+      nodes: initialNodes,
+      links: initialLinks
+    };
   }
 };
 
